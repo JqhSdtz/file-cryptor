@@ -1,19 +1,14 @@
-import java.math.BigInteger;
 import java.security.MessageDigest;
 import java.security.NoSuchAlgorithmException;
 import java.util.UUID;
 
 import javax.crypto.Cipher;
-import javax.crypto.spec.IvParameterSpec;
 import javax.crypto.spec.SecretKeySpec;
 
 public class CryptUtil {
 
     // 默认的AES加密算法，选择NoPadding是为了修改文件时不会改到后面的内容
     private static final String DEFAULT_CIPHER_ALGORITHM = "AES/ECB/NoPadding";
-    private static final IvParameterSpec iv = new IvParameterSpec(new byte[] { (byte) 0x43, (byte) 0xe3, (byte) 0x79,
-            (byte) 0xad, (byte) 0xa6, (byte) 0xd6, (byte) 0x6c, (byte) 0x15, (byte) 0xf6, (byte) 0xea, (byte) 0x16,
-            (byte) 0x1f, (byte) 0x67, (byte) 0xba, (byte) 0xd2, (byte) 0xb5 });
 
     /**
      * AES加密算法选择了NoPadding，就要求明文的字节数必须为16的倍数！！
