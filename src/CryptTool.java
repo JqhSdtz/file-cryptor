@@ -5,7 +5,7 @@ import java.nio.file.Files;
 import java.nio.file.Paths;
 import java.util.ArrayList;
 import java.util.List;
-import java.util.concurrent.ArrayBlockingQueue;
+import java.util.concurrent.LinkedBlockingDeque;
 import java.util.concurrent.ThreadPoolExecutor;
 import java.util.concurrent.TimeUnit;
 import java.util.concurrent.atomic.AtomicInteger;
@@ -13,8 +13,8 @@ import java.util.concurrent.atomic.AtomicLong;
 
 public class CryptTool {
 
-    private static ThreadPoolExecutor threadPool = new ThreadPoolExecutor(128, 1024, 10, TimeUnit.SECONDS,
-            new ArrayBlockingQueue<>(1024));
+    private static ThreadPoolExecutor threadPool = new ThreadPoolExecutor(128, 128, 0L, TimeUnit.MILLISECONDS,
+            new LinkedBlockingDeque<>());
 
     private static final int blockSize = 1024 * 10;
 
@@ -33,6 +33,10 @@ public class CryptTool {
     private static AtomicLong curTotalFinishedFileSize = new AtomicLong(0L);
     // 当前任务的已处理文件数
     private static AtomicInteger curTotalFinishedFileNum = new AtomicInteger(0);
+
+    public static void onExit() {
+        threadPool.shutdown();
+    }
 
     public static void encrypt(String path, String password, MainPanel mainPanel) {
         doCrypt(ENCRYPT, path, password, mainPanel);
@@ -144,7 +148,7 @@ public class CryptTool {
         mainPanel.endTimer();
         mainPanel.endProcess();
         String modeStr = getModeStr(mode);
-        mainPanel.appendResult(modeStr + "完成");
+        mainPanel.showMessage(modeStr + "完成");
     }
 
     private static void searchDirectory(int mode, List<File> fileList, File root) throws IOException {
@@ -374,22 +378,41 @@ public class CryptTool {
      * @return
      */
     private static long getNextPosition(long curPosition, long fileLength) {
-        if (curPosition < 1048576 || fileLength - curPosition < 524288) {
+        long nextPos = curPosition + blockSize;
+        if (curPosition < 1048576 || curPosition >= fileLength - 524288) {
             // 文件前1M和后512k的内容全部加密
-            return curPosition + blockSize;
-        } else if (fileLength > 16777216L) {
-            // 若文件大于16M，每8块加密1块
-        } else if (fileLength > 67108864L) {
-            // 若文件大于64M，每16块加密1块
-            return curPosition + blockSize * 8;
-        } else if (fileLength > 134217728L) {
-            // 若文件大于256M，每32块加密1块
-            return curPosition + blockSize * 16;
-        } else if (fileLength > 1073741824L) {
-            // 若文件大于1G，每64块加密1块
-            return curPosition + blockSize * 32;
+            nextPos = curPosition + blockSize;
+        } else {
+            boolean isJump = true;
+            if (fileLength > 4294967296L) {
+                // 若文件大于4G，每2048块加密1块
+                nextPos = curPosition + blockSize * 2048;
+            } else if (fileLength > 1073741824L) {
+                // 若文件大于1G，每512块加密1块
+                nextPos = curPosition + blockSize * 512;
+            } else if (fileLength > 134217728L) {
+                // 若文件大于256M，每128块加密1块
+                nextPos = curPosition + blockSize * 128;
+            } else if (fileLength > 67108864L) {
+                // 若文件大于64M，每32块加密1块
+                nextPos = curPosition + blockSize * 32;
+            } else if (fileLength > 16777216L) {
+                // 若文件大于16M，每8块加密1块
+                nextPos = curPosition + blockSize * 8;
+            } else {
+                isJump = false;
+                nextPos = curPosition + blockSize;
+            }
+            if (isJump) {
+                // 跳着走的时候，要防止跳过了
+                long p512 = fileLength - 524288;
+                // 下一个点离512k点的距离超过1步，要往回退，到512k位置后的第一个符合blockSize的点
+                if (nextPos > p512 + blockSize) {
+                    nextPos = p512 + blockSize - (p512 % blockSize);
+                }
+            }
         }
-        return curPosition + blockSize;
+        return nextPos;
     }
 
     /**
