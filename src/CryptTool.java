@@ -43,6 +43,14 @@ public class CryptTool {
     }
 
     private static void doCrypt(int mode, String path, String password, MainPanel mainPanel) {
+        if (path == null || "".equals(path)) {
+            mainPanel.showMessage("请输入文件路径");
+            return;
+        }
+        if (password == null || "".equals(password)) {
+            mainPanel.showMessage("请输入密码");
+            return;
+        }
         final String encryptedPassword = CryptUtil.md5(password);
         try {
             File root = new File(path);
